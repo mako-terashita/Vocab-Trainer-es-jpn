@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>JP↔ES Vocab Trainer</title>
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --border: #d1d5db;
+      --accent: #2563eb;
+      --accent-soft: #e0ecff;
+      --text-main: #111827;
+      --text-sub: #4b5563;
+      --ok: #15803d;
+      --ng: #b91c1c;
+    }
+
+    body {
+      font-family: ui-sans-serif, system-ui, -apple-system, "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Segoe UI", Arial;
+      margin: 0;
+      background: var(--bg);
+      color: var(--text-main);
+    }
+
+    .wrap { max-width: 860px; margin: 0 auto; padding: 24px; }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.08);
+    }
+
+    h1 { font-size: 20px; margin: 0 0 14px; }
+
+    .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+    .row > * { flex: 1 1 auto; }
+
+    select, button, input, textarea {
+      font-size: 14px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: #ffffff;
+      color: var(--text-main);
+    }
+
+    input:focus, select:focus, textarea:focus {
+      outline: 2px solid var(--accent);
+      border-color: var(--accent);
+    }
+
+    button {
+      cursor: pointer;
+      background: #f3f4f6;
+      font-weight: 500;
+    }
+
+    button.primary {
+      background: var(--accent);
+      color: white;
+      border: none;
+      font-weight: 700;
+    }
+
+    button.primary:hover {
+      background: #1e4ed8;
+    }
+
+    .q {
+      margin-top: 18px;
+      padding: 18px;
+      border-radius: 14px;
+      background: var(--accent-soft);
+      border: 1px solid #c7dbff;
+    }
+
+    .q .prompt {
+      font-size: 28px;
+      font-weight: 800;
+    }
+
+    .sub { margin-top: 8px; color: var(--text-sub); }
+
+    .hint {
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 10px;
+      border: 1px dashed var(--border);
+      background: #ffffff;
+      display: none;
+    }
+
+    .hint.show { display: block; }
+
+    .status { margin-top: 12px; font-weight: 700; }
+    .ok { color: var(--ok); }
+    .ng { color: var(--ng); }
+
+    .muted { color: var(--text-sub); }
+    .tiny { font-size: 12px; }
+
+    .split { display: grid; grid-template-columns: 1fr; gap: 14px; }
+    @media (min-width: 820px) { .split { grid-template-columns: 1.2fr .8fr; } }
+
+    textarea { min-height: 120px; width: 100%; resize: vertical; }
+
+    code {
+      padding: 2px 6px;
+      border-radius: 6px;
+      background: #f3f4f6;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>JP↔ES Vocab Trainer</h1>
+
+      <div class="row">
+        <label class="tiny muted">出題方向
+          <select id="mode">
+            <option value="ja_to_es">日本語 → スペイン語</option>
+            <option value="es_to_ja">スペイン語 → 日本語</option>
+          </select>
+        </label>
+
+        <label class="tiny muted">カテゴリ
+          <select id="category"></select>
+        </label>
+
+        <label class="tiny muted">チェック方式
+          <select id="check">
+            <option value="strict">厳密（完全一致）</option>
+            <option value="soft" selected>ゆるめ（記号/大文字小文字を無視）</option>
+          </select>
+        </label>
+
+        <button id="new" class="primary">次の問題</button>
+      </div>
+
+      <div class="q">
+        <div class="prompt" id="prompt">—</div>
+        <div class="sub" id="sub">—</div>
+
+        <div class="row" style="margin-top: 10px;">
+          <input id="answer" type="text" placeholder="ここに答えを入力" autocomplete="off" />
+          <button id="checkBtn" class="primary">判定</button>
+          <button id="revealBtn">答えを見る</button>
+        </div>
+
+        <div class="hint" id="hint"></div>
+        <div class="status" id="status"></div>
+        <div class="tiny muted" id="score">0 / 0（正解 / 出題）</div>
+      </div>
+
+      <div class="split" style="margin-top: 14px;">
+        <div>
+          <div class="tiny muted" style="margin-bottom: 6px;">学習メモ（任意）</div>
+          <textarea id="notes" placeholder="例）似た単語：\n・mado（窓） vs modo（やり方）\nなど"></textarea>
+          <div class="row" style="margin-top: 8px;">
+            <button id="saveNotes">メモ保存</button>
+            <button id="clearNotes">メモ消去</button>
+          </div>
+        </div>
+        <div>
+          <div class="tiny muted" style="margin-bottom: 6px;">単語データ（JSON）</div>
+          <textarea id="data" spellcheck="false"></textarea>
+          <div class="row" style="margin-top: 8px;">
+            <button id="loadData">JSONを読み込む</button>
+            <button id="resetData">添付データに戻す</button>
+          </div>
+          <p class="tiny muted" style="margin: 8px 0 0;">
+            自分で単語を追加したい場合は、下のJSONに <code>{"category":"…","es":"…","ja":"…","romaji":"…"}</code>
+            を追記して <b>JSONを読み込む</b>。
+          </p>
+        </div>
+      </div>
+
+      <p class="tiny muted" style="margin: 12px 0 0;">
+        操作：<b>Enter</b>=判定 / <b>Shift+Enter</b>=次の問題
+      </p>
+    </div>
+  </div>
+
+<script>
+  // --- ここが単語データ（添付PDFの内容を元に整形） ---
+  const DEFAULT_VOCAB = [
+  {"category":"Vida cotidiana","es":"Casa","ja":"家","romaji":"ie"},
+  {"category":"Vida cotidiana","es":"Agua","ja":"水","romaji":"mizu"},
+  {"category":"Vida cotidiana","es":"Comida","ja":"食べ物","romaji":"tabemono"},
+  {"category":"Ocio diario","es":"Película","ja":"映画","romaji":"eiga"},
+  {"category":"Ocio diario","es":"Música","ja":"音楽","romaji":"ongaku"},
+  {"category":"Hobbies y viajes","es":"Viaje","ja":"旅行","romaji":"ryokou"},
+  {"category":"Hobbies y viajes","es":"Amigo","ja":"友達","romaji":"tomodachi"}
+];
+
+  const LS_KEY = "jp_es_vocab_trainer_v1";
+  const LS_NOTES = "jp_es_vocab_trainer_notes_v1";
+
+  const el = (id) => document.getElementById(id);
+  const modeEl = el('mode');
+  const catEl = el('category');
+  const checkEl = el('check');
+  const promptEl = el('prompt');
+  const subEl = el('sub');
+  const ansEl = el('answer');
+  const hintEl = el('hint');
+  const statusEl = el('status');
+  const scoreEl = el('score');
+  const dataEl = el('data');
+  const notesEl = el('notes');
+
+  let vocab = loadVocab();
+  let current = null;
+  let total = 0;
+  let correct = 0;
+
+  function loadVocab(){
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      if (!raw) return DEFAULT_VOCAB;
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return DEFAULT_VOCAB;
+      return parsed;
+    } catch { return DEFAULT_VOCAB; }
+  }
+  function saveVocab(v){ localStorage.setItem(LS_KEY, JSON.stringify(v)); }
+
+  function normSoft(s){
+    // 1) trim + lowercase
+    // 2) remove accents/diacritics (áéíóúüñ etc.) via Unicode normalization
+    // 3) remove punctuation
+    // 4) normalize whitespace
+    return (s ?? "")
+      .toString()
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[¿?¡!.,;:()\[\]{}\"'`´“”‘’]/g, "")
+      .replace(/\s+/g, " ");
+  }
+  function normStrict(s){ return (s ?? "").toString().trim(); }
+
+  function categoriesFrom(v){
+    const set = new Set(v.map(x => x.category || "(なし)"));
+    return ["(すべて)", ...Array.from(set)];
+  }
+
+  function refreshCategoryOptions(){
+    const cats = categoriesFrom(vocab);
+    const prev = catEl.value;
+    catEl.innerHTML = "";
+    for (const c of cats){
+      const opt = document.createElement('option');
+      opt.value = c;
+      opt.textContent = c;
+      catEl.appendChild(opt);
+    }
+    if (cats.includes(prev)) catEl.value = prev;
+  }
+
+  function pool(){
+    const c = catEl.value;
+    if (!c || c === "(すべて)") return vocab;
+    return vocab.filter(x => (x.category || "(なし)") === c);
+  }
+
+  function pick(){
+    const p = pool();
+    if (!p.length) return null;
+    return p[Math.floor(Math.random() * p.length)];
+  }
+
+  function renderNew(){
+    current = pick();
+    hintEl.classList.remove('show');
+    statusEl.textContent = "";
+    statusEl.className = "status";
+    ansEl.value = "";
+    ansEl.focus();
+
+    if (!current){
+      promptEl.textContent = "単語がありません";
+      subEl.textContent = "JSONを読み込むか、カテゴリを(すべて)にしてください";
+      return;
+    }
+
+    const mode = modeEl.value;
+    if (mode === "ja_to_es"){
+      promptEl.textContent = current.ja;
+      subEl.textContent = `カテゴリ: ${current.category} / ローマ字: ${current.romaji}`;
+      hintEl.innerHTML = `<b>答え</b>: ${escapeHtml(current.es)}`;
+    } else {
+      promptEl.textContent = current.es;
+      subEl.textContent = `カテゴリ: ${current.category} / ヒント: 日本語(${current.ja}) / ローマ字(${current.romaji})`;
+      hintEl.innerHTML = `<b>答え</b>: ${escapeHtml(current.ja)} <span class="muted">(${escapeHtml(current.romaji)})</span>`;
+    }
+  }
+
+  function escapeHtml(str){
+    return (str ?? "").toString()
+      .replace(/&/g,"&amp;")
+      .replace(/</g,"&lt;")
+      .replace(/>/g,"&gt;")
+      .replace(/"/g,"&quot;")
+      .replace(/'/g,"&#039;");
+  }
+
+  function checkAnswer(){
+    if (!current) return;
+    const mode = modeEl.value;
+    const expected = mode === "ja_to_es" ? current.es : current.ja;
+    const got = ansEl.value;
+
+    const checker = (checkEl.value === "strict") ? normStrict : normSoft;
+    const ok = checker(got) === checker(expected);
+
+    total += 1;
+    if (ok) correct += 1;
+
+    scoreEl.textContent = `${correct} / ${total}（正解 / 出題）`;
+
+    if (ok){
+      statusEl.textContent = "✅ 正解！";
+      statusEl.className = "status ok";
+      hintEl.classList.remove('show');
+      setTimeout(renderNew, 450);
+    } else {
+      statusEl.textContent = "❌ 惜しい！ 答えを確認して、もう一度どうぞ";
+      statusEl.className = "status ng";
+      hintEl.classList.add('show');
+    }
+  }
+
+  // --- データUI ---
+  function renderDataBox(){
+    dataEl.value = JSON.stringify(vocab, null, 2);
+  }
+
+  function loadFromBox(){
+    try {
+      const parsed = JSON.parse(dataEl.value);
+      if (!Array.isArray(parsed)) throw new Error('not array');
+      // 最低限の整形
+      vocab = parsed
+        .map(x => ({
+          category: (x.category ?? "(なし)").toString(),
+          es: (x.es ?? "").toString(),
+          ja: (x.ja ?? "").toString(),
+          romaji: (x.romaji ?? "").toString(),
+        }))
+        .filter(x => x.es && x.ja);
+
+      saveVocab(vocab);
+      refreshCategoryOptions();
+      renderDataBox();
+      renderNew();
+    } catch (e){
+      alert("JSONの形式が正しくありません。\n例：[{\"category\":\"Vida cotidiana\",\"es\":\"Casa\",\"ja\":\"家\",\"romaji\":\"ie\"}]\n\n詳細: " + e.message);
+    }
+  }
+
+  function resetData(){
+    vocab = DEFAULT_VOCAB;
+    saveVocab(vocab);
+    refreshCategoryOptions();
+    renderDataBox();
+    renderNew();
+  }
+
+  // --- メモ ---
+  function loadNotes(){
+    const raw = localStorage.getItem(LS_NOTES);
+    if (raw) notesEl.value = raw;
+  }
+  function saveNotes(){ localStorage.setItem(LS_NOTES, notesEl.value); }
+  function clearNotes(){ notesEl.value = ""; localStorage.removeItem(LS_NOTES); }
+
+  // --- イベント ---
+  el('new').addEventListener('click', renderNew);
+  el('checkBtn').addEventListener('click', checkAnswer);
+  el('revealBtn').addEventListener('click', () => hintEl.classList.toggle('show'));
+  catEl.addEventListener('change', renderNew);
+  modeEl.addEventListener('change', renderNew);
+  checkEl.addEventListener('change', () => { statusEl.textContent = ""; hintEl.classList.remove('show'); });
+
+  el('loadData').addEventListener('click', loadFromBox);
+  el('resetData').addEventListener('click', resetData);
+  el('saveNotes').addEventListener('click', saveNotes);
+  el('clearNotes').addEventListener('click', clearNotes);
+
+  ansEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && e.shiftKey){
+      e.preventDefault();
+      renderNew();
+      return;
+    }
+    if (e.key === 'Enter'){
+      e.preventDefault();
+      checkAnswer();
+    }
+  });
+
+  // init
+  refreshCategoryOptions();
+  renderDataBox();
+  loadNotes();
+  renderNew();
+</script>
+</body>
+</html>
