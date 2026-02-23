@@ -174,8 +174,8 @@
             <button id="resetData">添付データに戻す</button>
           </div>
           <p class="tiny muted" style="margin: 8px 0 0;">
-            自分で単語を追加したい場合は、下のJSONに <code>{"category":"…","es":"…","ja":"…","romaji":"…"}</code>
-            を追記して <b>JSONを読み込む</b>。
+            自分で単語を追加したい場合は、<code>vocab-data.json</code>ファイルに <code>{"category":"…","es":"…","ja":"…","romaji":"…"}</code>
+            を追記してページを更新するか、下のJSONに追記して <b>JSONを読み込む</b>。
           </p>
         </div>
       </div>
@@ -214,10 +214,23 @@
   const dataEl = el('data');
   const notesEl = el('notes');
 
-  let vocab = loadVocab();
+  let vocab = [];
   let current = null;
   let total = 0;
   let correct = 0;
+
+  async function loadVocabFromFile(){
+    try {
+      const response = await fetch('vocab-data.json');
+      if (!response.ok) throw new Error('File not found');
+      const data = await response.json();
+      if (!Array.isArray(data)) throw new Error('Invalid format');
+      return data;
+    } catch (e) {
+      console.warn('外部JSONファイルの読み込みに失敗:', e);
+      return DEFAULT_VOCAB;
+    }
+  }
 
   function loadVocab(){
     try {
@@ -365,8 +378,8 @@
     }
   }
 
-  function resetData(){
-    vocab = DEFAULT_VOCAB;
+  async function resetData(){
+    vocab = await loadVocabFromFile();
     saveVocab(vocab);
     refreshCategoryOptions();
     renderDataBox();
@@ -407,10 +420,24 @@
   });
 
   // init
-  refreshCategoryOptions();
-  renderDataBox();
-  loadNotes();
-  renderNew();
+  async function init(){
+    const fileData = await loadVocabFromFile();
+    const localData = loadVocab();
+
+    if (localData.length > DEFAULT_VOCAB.length || localStorage.getItem(LS_KEY)){
+      vocab = localData;
+    } else {
+      vocab = fileData;
+      saveVocab(vocab);
+    }
+
+    refreshCategoryOptions();
+    renderDataBox();
+    loadNotes();
+    renderNew();
+  }
+
+  init();
 </script>
 </body>
 </html>
